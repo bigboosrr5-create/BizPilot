@@ -1,7 +1,9 @@
 import os
+import bcrypt
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+
 from database import create_connection
 from auth import (
     is_logged_in,
@@ -124,148 +126,163 @@ div[data-testid="stMetric"] {
 
 if not is_logged_in():
 
-    # ---------------- SIDEBAR ----------------
+    # ---------------- LOGIN PAGE ----------------
 
-    with st.sidebar:
+    st.markdown("""
+    <style>
+    .login-container {
+        max-width: 520px;
+        margin: 50px auto 20px auto;
+        padding: 34px 38px;
+        border-radius: 20px;
+        border: 1px solid rgba(128,128,128,0.18);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+    }
 
-        if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, use_container_width=True)
+    .login-title {
+        text-align: center;
+        font-size: 34px;
+        font-weight: 800;
+        margin-top: 10px;
+    }
+
+    .login-subtitle {
+        text-align: center;
+        opacity: 0.70;
+        margin-bottom: 22px;
+    }
+
+    .login-footer {
+        text-align: center;
+        opacity: 0.60;
+        font-size: 13px;
+        margin-top: 18px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=150)
+
+    st.markdown(
+        '<div class="login-title">🔐 BizPilot</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="login-subtitle">Manage • Analyse • Grow</div>',
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+    st.subheader("Business Login")
+
+    with st.form("login_form", clear_on_submit=False):
+
+        email = st.text_input(
+            "📧 Email Address",
+            placeholder="Enter your business email"
+        )
+
+        password = st.text_input(
+            "🔑 Password",
+            type="password",
+            placeholder="Enter your password"
+        )
+
+        login = st.form_submit_button(
+            "🚀 Login",
+            use_container_width=True
+        )
+
+    if login:
+
+        if email.strip() == "" or password.strip() == "":
+            st.error("❌ Please enter Email and Password.")
+
         else:
-            st.markdown("# BizPilot")
 
-        st.markdown("---")
-        st.markdown("### Welcome to BizPilot")
-        st.caption("Manage • Analyse • Grow")
+            connection = create_connection()
 
-    # ---------------- HOME PAGE ----------------
+            if connection:
 
-    st.markdown('<div class="bizpilot-hero">', unsafe_allow_html=True)
+                cursor = None
 
-    col1, col2 = st.columns([1, 2])
+                try:
+                    cursor = connection.cursor(dictionary=True)
 
-    with col1:
-        if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, width=220)
+                    cursor.execute("""
+                        SELECT
+                            business_id,
+                            business_name,
+                            owner_name,
+                            email,
+                            password_hash
+                        FROM businesses
+                        WHERE email = %s
+                    """, (email.strip(),))
 
-    with col2:
-        st.title("BizPilot")
-        st.subheader("Manage • Analyse • Grow")
+                    business = cursor.fetchone()
 
-        st.write(
-            "A smart business management and analytics platform "
-            "designed to help small businesses manage sales, "
-            "inventory, expenses and business performance."
-        )
+                except Exception as e:
+                    business = None
+                    st.error(f"❌ Login/database error: {e}")
 
-        st.info(
-            "Please use the Login page from the sidebar to access your business dashboard."
-        )
+                finally:
+                    if cursor is not None:
+                        cursor.close()
+                    connection.close()
+
+                if business:
+
+                    stored_hash = business.get("password_hash")
+
+                    try:
+                        password_ok = bool(
+                            stored_hash
+                            and bcrypt.checkpw(
+                                password.encode("utf-8"),
+                                stored_hash.encode("utf-8")
+                                if isinstance(stored_hash, str)
+                                else stored_hash
+                            )
+                        )
+                    except Exception:
+                        password_ok = False
+
+                    if password_ok:
+
+                        st.session_state["logged_in"] = True
+                        st.session_state["business_id"] = business["business_id"]
+                        st.session_state["business_name"] = business["business_name"]
+                        st.session_state["owner_name"] = business["owner_name"]
+
+                        st.success(
+                            f"✅ Welcome to BizPilot, "
+                            f"{business['business_name']}!"
+                        )
+
+                        st.rerun()
+
+                    else:
+                        st.error("❌ Incorrect password.")
+
+                else:
+                    st.error("❌ Business account not found.")
+
+            else:
+                st.error("❌ Database connection failed.")
+
+    st.markdown(
+        '<div class="login-footer">Secure Business Management & Analytics Platform</div>',
+        unsafe_allow_html=True
+    )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------------- FEATURES ----------------
-
-    st.markdown("## 🚀 Powerful Business Management")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>📊 Dashboard</h3>
-        <p>Get a clear overview of sales, expenses, profit and inventory.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>📦 Inventory</h3>
-        <p>Track products, stock levels and identify low-stock items.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c3:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>📈 Analytics</h3>
-        <p>Understand business performance using meaningful analytics.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("")
-
-    c4, c5, c6 = st.columns(3)
-
-    with c4:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>💰 Sales</h3>
-        <p>Record sales and automatically keep business data organised.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c5:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>💡 Smart Insights</h3>
-        <p>Get useful business insights from your sales and expense data.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c6:
-        st.markdown("""
-        <div class="bizpilot-card">
-        <h3>📄 Reports & Invoices</h3>
-        <p>Generate professional reports and downloadable invoices.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ---------------- BUSINESS FLOW ----------------
-
-    st.markdown("---")
-    st.markdown("## 🔄 How BizPilot Works")
-
-    flow1, flow2, flow3, flow4 = st.columns(4)
-
-    with flow1:
-        st.markdown("### 1️⃣ Record")
-        st.caption("Add sales, products, customers and expenses.")
-
-    with flow2:
-        st.markdown("### 2️⃣ Store")
-        st.caption("Business information is securely stored in MySQL.")
-
-    with flow3:
-        st.markdown("### 3️⃣ Analyse")
-        st.caption("BizPilot converts data into useful analytics.")
-
-    with flow4:
-        st.markdown("### 4️⃣ Grow")
-        st.caption("Use insights to make better business decisions.")
-
-    # ---------------- TECHNOLOGY ----------------
-
-    st.markdown("---")
-    st.markdown("## 🛠️ Technology Stack")
-
-    tech1, tech2, tech3, tech4, tech5 = st.columns(5)
-
-    tech1.metric("Backend", "Python")
-    tech2.metric("Database", "MySQL")
-    tech3.metric("Interface", "Streamlit")
-    tech4.metric("Analytics", "Pandas")
-    tech5.metric("Charts", "Plotly")
-
-    # ---------------- FOOTER ----------------
-
-    st.markdown("""
-    <div class="bizpilot-footer">
-        <b>BizPilot</b> — Manage • Analyse • Grow<br>
-        Smart Business Management & Analytics Platform
-    </div>
-    """, unsafe_allow_html=True)
-
+    # Do not render the dashboard until the user is logged in.
     st.stop()
 
 
