@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 
 from database import create_connection
-from utils.auth import (
+from auth import (
     is_logged_in,
     get_business_id,
     get_business_name,
