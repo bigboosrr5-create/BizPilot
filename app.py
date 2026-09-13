@@ -2,9 +2,8 @@ import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-
 from database import create_connection
-from auth import (
+from utils.auth import (
     is_logged_in,
     get_business_id,
     get_business_name,
